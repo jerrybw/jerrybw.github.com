@@ -1,12 +1,378 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<title>向博文</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>✨ 我的个性星球</title>
+    <style>
+        /* 全局重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background: #0a0a1a;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            height: 100vh;
+            cursor: pointer;
+            user-select: none;
+        }
+        /* Canvas 作为背景 */
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* 覆盖层文字 - 居中显示 */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 让点击穿透到 canvas */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            text-align: center;
+        }
+        .time {
+            font-size: clamp(3rem, 12vw, 6rem);
+            font-weight: 300;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.2em;
+            filter: drop-shadow(0 0 30px rgba(245, 87, 108, 0.3));
+        }
+        .greeting {
+            font-size: clamp(1.2rem, 4vw, 2.2rem);
+            font-weight: 500;
+            letter-spacing: 2px;
+            opacity: 0.9;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5em;
+        }
+        .slogan {
+            font-size: clamp(0.9rem, 2.5vw, 1.4rem);
+            opacity: 0.7;
+            font-weight: 300;
+            letter-spacing: 6px;
+            color: #ccc;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 24px;
+            border-radius: 40px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        /* 左下角提示 */
+        .hint {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            pointer-events: none;
+        }
+        .hint span {
+            display: inline-block;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 0.25;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>向博文</h1>
-    <p>我是一个程序猿。</p>
-	<a href='Hello.html'>Hello</a>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="overlay">
+        <div class="time" id="clock">00:00:00</div>
+        <div class="greeting">✨ 欢迎来到我的小宇宙</div>
+        <div class="slogan" id="slogan">「 保持好奇，永远年轻 」</div>
+    </div>
+
+    <div class="hint"><span>✦ 点击任意处 引爆星河 ✦</span></div>
+
+    <script>
+        // ============================================================
+        //  1. 粒子引擎
+        // ============================================================
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let W, H;
+
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, vx, vy, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.radius = radius || (2 + Math.random() * 4);
+                this.color = color || `hsl(${Math.random() * 360}, 80%, 60%)`;
+                this.life = 1; // 用于爆炸粒子衰减
+                this.decay = 0.98 + Math.random() * 0.015;
+                this.gravity = 0.02;
+                this.friction = 0.99;
+                this.alpha = 1;
+            }
+
+            update() {
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                this.vy += this.gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.radius *= 0.995;
+                this.alpha *= 0.998;
+                if (this.radius < 0.1) this.radius = 0;
+            }
+
+            draw() {
+                if (this.radius < 0.1) return;
+                ctx.save();
+                ctx.globalAlpha = this.alpha * 0.9;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 背景星系粒子（缓慢旋转）
+        let stars = [];
+        const STAR_COUNT = 400;
+
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < STAR_COUNT; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 50 + Math.random() * Math.min(W, H) * 0.45;
+                const x = W / 2 + Math.cos(angle) * radius;
+                const y = H / 2 + Math.sin(angle) * radius;
+                const size = 1 + Math.random() * 3;
+                const hue = 200 + Math.random() * 60;
+                stars.push({
+                    x,
+                    y,
+                    baseX: x,
+                    baseY: y,
+                    angle: angle,
+                    radius: radius,
+                    speed: 0.0004 + Math.random() * 0.001,
+                    size: size,
+                    color: `hsla(${hue}, 70%, 70%, ${0.4 + Math.random() * 0.6})`,
+                    phase: Math.random() * 100
+                });
+            }
+        }
+        initStars();
+
+        // 爆炸粒子池
+        let explodeParticles = [];
+
+        function explode(cx, cy) {
+            const count = 120 + Math.floor(Math.random() * 80);
+            const colors = ['#f5576c', '#f093fb', '#4facfe', '#43e97b', '#f9d976', '#ff6b6b'];
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 8;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed - 2;
+                const radius = 2 + Math.random() * 6;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const p = new Particle(cx, cy, vx, vy, radius, color);
+                p.decay = 0.97 + Math.random() * 0.02;
+                p.gravity = 0.05 + Math.random() * 0.06;
+                p.friction = 0.97 + Math.random() * 0.02;
+                p.alpha = 1;
+                explodeParticles.push(p);
+            }
+        }
+
+        // ============================================================
+        //  2. 鼠标 / 触摸交互
+        // ============================================================
+        let mouseX = W / 2,
+            mouseY = H / 2;
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        document.addEventListener('click', (e) => {
+            explode(e.clientX, e.clientY);
+            // 同时更换标语
+            const slogans = [
+                '「 保持好奇，永远年轻 」',
+                '「 代码是诗，逻辑是韵 」',
+                '「 今天也是闪闪发光的一天 」',
+                '「 在宇宙中，我们皆是星辰 」',
+                '「 梦想家永不迷路 」',
+                '「 创造，而非等待 」',
+                '「 你好，世界！ 👋 」'
+            ];
+            const el = document.getElementById('slogan');
+            let newText = slogans[Math.floor(Math.random() * slogans.length)];
+            while (newText === el.textContent) {
+                newText = slogans[Math.floor(Math.random() * slogans.length)];
+            }
+            el.textContent = newText;
+        });
+
+        // 触摸支持
+        document.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            explode(touch.clientX, touch.clientY);
+            // 也更换标语
+            const slogans = [
+                '「 保持好奇，永远年轻 」',
+                '「 代码是诗，逻辑是韵 」',
+                '「 今天也是闪闪发光的一天 」',
+                '「 在宇宙中，我们皆是星辰 」',
+                '「 梦想家永不迷路 」',
+                '「 创造，而非等待 」',
+                '「 你好，世界！ 👋 」'
+            ];
+            const el = document.getElementById('slogan');
+            let newText = slogans[Math.floor(Math.random() * slogans.length)];
+            while (newText === el.textContent) {
+                newText = slogans[Math.floor(Math.random() * slogans.length)];
+            }
+            el.textContent = newText;
+        }, { passive: true });
+
+        // ============================================================
+        //  3. 时钟更新
+        // ============================================================
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ============================================================
+        //  4. 动画循环
+        // ============================================================
+        function draw() {
+            // 半透明擦除实现拖尾效果
+            ctx.fillStyle = 'rgba(10, 10, 26, 0.25)';
+            ctx.fillRect(0, 0, W, H);
+
+            // ---- 更新并绘制星系粒子 ----
+            const centerX = W / 2 + (mouseX - W / 2) * 0.05;
+            const centerY = H / 2 + (mouseY - H / 2) * 0.05;
+
+            stars.forEach(star => {
+                // 缓慢旋转
+                star.angle += star.speed;
+                // 微微浮动
+                const floatOffset = Math.sin(Date.now() * 0.001 + star.phase) * 2;
+                const r = star.radius + floatOffset;
+                star.x = centerX + Math.cos(star.angle) * r;
+                star.y = centerY + Math.sin(star.angle) * r;
+
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                ctx.shadowColor = star.color;
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fillStyle = star.color;
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // ---- 连接靠近的星星（形成网状） ----
+            for (let i = 0; i < stars.length; i += 6) { // 稀疏连接，提高性能
+                for (let j = i + 1; j < stars.length; j += 6) {
+                    const dx = stars[i].x - stars[j].x;
+                    const dy = stars[i].y - stars[j].y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 120) {
+                        ctx.save();
+                        ctx.globalAlpha = 0.15 * (1 - dist / 120);
+                        ctx.strokeStyle = `rgba(180, 220, 255, 0.3)`;
+                        ctx.lineWidth = 0.6;
+                        ctx.beginPath();
+                        ctx.moveTo(stars[i].x, stars[i].y);
+                        ctx.lineTo(stars[j].x, stars[j].y);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                }
+            }
+
+            // ---- 更新并绘制爆炸粒子 ----
+            for (let i = explodeParticles.length - 1; i >= 0; i--) {
+                const p = explodeParticles[i];
+                p.update();
+                if (p.radius < 0.1 || p.alpha < 0.01) {
+                    explodeParticles.splice(i, 1);
+                } else {
+                    p.draw();
+                }
+            }
+
+            // ---- 额外：鼠标位置产生微弱的辉光 ----
+            const grad = ctx.createRadialGradient(mouseX, mouseY, 5, mouseX, mouseY, 200);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0.04)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+
+        // ============================================================
+        //  5. 窗口改变重置星星分布
+        // ============================================================
+        window.addEventListener('resize', () => {
+            resize();
+            initStars();
+        });
+
+        // 点击时强制刷新一次光标提示
+        console.log('✨ 欢迎来到个性星球！点击任意处引爆星河。');
+    </script>
 </body>
 </html>
