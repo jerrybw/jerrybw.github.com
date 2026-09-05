@@ -2,7 +2,7 @@
 
 > 一个炫酷、可交互的 GitHub Pages 静态网页，包含动态粒子星系、实时时钟和点击爆炸特效。
 
-![预览效果]()  
+![预览效果](https://github.com/jerrybw/jerrybw.github.com/blob/master/ScreenShot_2026-09-05_120750_413.png)  
 *(你可以在这里放一张实际部署后的截图)*
 
 ---
